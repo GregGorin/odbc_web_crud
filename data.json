@@ -1,0 +1,1 @@
+{"odbc_source":"Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=C:\\BIN\\work_space\\msaccess\\Database1.accdb","sql_text":"select * from table1","data_set":[[""]]}
