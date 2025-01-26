@@ -1,5 +1,5 @@
 [package]
-name = "odbc_web_server"
+name = "odbc_web_crud"
 version = "0.1.0"
 edition = "2021"
 

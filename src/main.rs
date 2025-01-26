@@ -2,78 +2,54 @@ use async_std::fs;
 use async_std::net::TcpListener;
 use async_std::net::TcpStream;
 use async_std::prelude::*;
-// use async_std::task;
 use futures::stream::StreamExt;
 use local_ip_address::local_ip;
+use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
-use std::u32;
-// use std::time::Duration;
 
-mod odbc;
-use odbc::*;
+mod myodbc;
+use myodbc::*;
 struct MyRequest {
-    headers: Vec<String>,
+    headers: HashMap<String, String>,
     body: Option<String>,
-}
-impl MyRequest {
-    pub fn pass_key_is_ok(&self) -> bool {
-        match self.get_header_parametr("PassKey") {
-            Some(passkey) => correct(passkey, self.body_length()),
-            None => false,
-        }
-    }
-    fn body_length(&self) -> u32 {
-        self.body.as_ref().unwrap().len() as u32
-    }
-    pub fn get_header_parametr(&self, parametr: &str) -> Option<String> {
-        for header_line in &self.headers {
-            if header_line.contains(parametr) {
-                return Some(
-                    header_line.split(":").collect::<Vec<&str>>()[1]
-                        .trim()
-                        .to_string(),
-                );
-            }
-        }
-        None
-    }
-}
-fn correct(passkey: String, cont_length: u32) -> bool {
-    // let mut sum = cont_length;
-    // for ch in passkey.chars() {
-    //     sum = sum + ch.to_digit(10).unwrap_or(0);
-    // }
-    // sum % 7 == 0
-    true
 }
 
 fn request(request_txt: String) -> MyRequest {
     let mut next_body = false;
-    let mut headers: Vec<String> = Vec::new();
     let mut body = String::new();
+    let mut headers: HashMap<String, String> = HashMap::new();
 
     for line in request_txt.lines() {
         if next_body {
-            body.push_str(line)
+            body.push_str(line);
         } else {
             if line == "" {
                 next_body = true;
             } else {
-                headers.push(line.to_string());
+                if line.contains("HTTP") {
+                    headers.insert("Protocol".to_string(), line.trim().to_owned());
+                } else {
+                    line.split_once(':').and_then(|(key, value)| {
+                        headers.insert(key.trim().to_owned(), value.trim().to_owned())
+                    });
+                }
             }
         }
     }
+    // println!("{:#?}",headers);
     MyRequest {
-        headers,
         body: match body.len() {
             0 => None,
             _ => Some(body),
         },
+        headers,
     }
 }
 
 #[async_std::main]
 async fn main() {
+    // testmutex();
+
     let local_ip = local_ip().unwrap();
 
     let socket = match local_ip {
@@ -92,6 +68,7 @@ async fn main() {
         })
         .await;
 }
+
 async fn read_http_request(stream: &mut TcpStream) -> Vec<u8> {
     let mut vec_u8: Vec<u8> = Vec::new();
     loop {
@@ -116,7 +93,7 @@ async fn read_http_request(stream: &mut TcpStream) -> Vec<u8> {
 async fn handle_connection(mut stream: TcpStream) {
     let vec_u8 = read_http_request(&mut stream).await;
     let request = request(String::from_utf8_lossy(&vec_u8).to_string());
-    let protocol = &request.headers[0];
+    let protocol = request.headers.get("Protocol").unwrap();
     // println!("Protocol: {:?}", protocol);
 
     let http_200 = "HTTP/1.1 200 OK\r\n\r\n";
@@ -128,7 +105,7 @@ async fn handle_connection(mut stream: TcpStream) {
             format!("{http_200}{contents}")
         }
         "POST / HTTP/1.1" => {
-            if request.pass_key_is_ok() && request.body.is_some() {
+            if request.body.is_some() {
                 match serde_json::from_str(&request.body.unwrap()) {
                     Ok(job) => {
                         let res = execute_job(job);
@@ -159,7 +136,7 @@ async fn handle_connection(mut stream: TcpStream) {
 mod tests {
     use std::{fs::File, io::Write};
 
-    use super::odbc::*;
+    use super::myodbc::*;
 
     #[test]
     fn main() {

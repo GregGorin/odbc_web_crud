@@ -1,6 +1,8 @@
 // extern crate odbc;
 use odbc::*;
 use serde::{Deserialize, Serialize};
+// use std::sync::Arc;
+// use std::sync::Mutex;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Job {
@@ -48,9 +50,10 @@ fn make_command(data_line: &Vec<String>, sql_text: &str) -> String {
 }
 
 fn connect_and_execute(job: Job) -> std::result::Result<Vec<Vec<String>>, DiagnosticRecord> {
-    let env = create_environment_v3().map_err(|e| e.unwrap())?;
-    let conn = env.connect_with_connection_string(&job.odbc_source)?;
-    
+    let env: Environment<odbc_safe::Odbc3> = create_environment_v3().map_err(|e| e.unwrap())?;
+    let conn: Connection<'_, odbc_safe::AutocommitOn> =
+        env.connect_with_connection_string(&job.odbc_source)?;
+
     let mut data_set = Vec::<Vec<String>>::new();
 
     for data_line in job.data_set {
@@ -74,5 +77,6 @@ fn connect_and_execute(job: Job) -> std::result::Result<Vec<Vec<String>>, Diagno
             NoData(_) => (),
         }
     }
+
     Ok(data_set)
 }
